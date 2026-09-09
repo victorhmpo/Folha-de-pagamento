@@ -1,0 +1,316 @@
+REPORT z35folha_de_pagamento.
+
+TABLES sscrfields.
+
+TYPES ty_salario TYPE p DECIMALS 2.
+
+DATA sal_min TYPE ty_salario VALUE '1621.00'.
+
+CLASS zcl_funcionario DEFINITION.
+
+  PUBLIC SECTION.
+
+    METHODS:
+      constructor
+        IMPORTING
+          iv_salario TYPE ty_salario,
+
+      get_salario
+        RETURNING VALUE(rv_salario) TYPE ty_salario.
+
+  PRIVATE SECTION.
+
+    DATA mv_salario TYPE ty_salario.
+
+    METHODS validar_salario
+      IMPORTING iv_salario TYPE ty_salario.
+
+ENDCLASS.
+
+CLASS zcl_funcionario IMPLEMENTATION.
+
+  METHOD constructor.
+
+    validar_salario( iv_salario ).
+
+    mv_salario = iv_salario.
+
+  ENDMETHOD.
+
+  METHOD get_salario.
+
+    rv_salario = mv_salario.
+
+  ENDMETHOD.
+
+  METHOD validar_salario.
+
+    CONSTANTS: lc_salario_minimo TYPE ty_salario VALUE '1621.00'. "Salário mínimo hoje
+
+    IF iv_salario < lc_salario_minimo.
+      MESSAGE 'Salário abaixo do limite permitido.' TYPE 'E'.
+    ENDIF.
+
+  ENDMETHOD.
+
+ENDCLASS.
+
+CLASS zcl_resultado_folha DEFINITION.
+
+  PUBLIC SECTION.
+
+    METHODS:
+      constructor
+        IMPORTING
+          iv_bruto   TYPE ty_salario
+          iv_inss    TYPE ty_salario
+          iv_irrf    TYPE ty_salario
+          iv_liquido TYPE ty_salario.
+
+    METHODS:
+      get_bruto
+        RETURNING VALUE(rv_bruto) TYPE ty_salario,
+
+      get_inss
+        RETURNING VALUE(rv_inss) TYPE ty_salario,
+
+      get_irrf
+        RETURNING VALUE(rv_irrf) TYPE ty_salario,
+
+      get_liquido
+        RETURNING VALUE(rv_liquido) TYPE ty_salario.
+
+  PRIVATE SECTION.
+
+    DATA: mv_bruto   TYPE ty_salario,
+          mv_inss    TYPE ty_salario,
+          mv_irrf    TYPE ty_salario,
+          mv_liquido TYPE ty_salario.
+
+ENDCLASS.
+
+CLASS zcl_resultado_folha IMPLEMENTATION.
+
+  METHOD constructor.
+
+    mv_bruto   = iv_bruto.
+    mv_inss    = iv_inss.
+    mv_irrf    = iv_irrf.
+    mv_liquido = iv_liquido.
+
+  ENDMETHOD.
+
+  METHOD get_bruto.
+    rv_bruto = mv_bruto.
+  ENDMETHOD.
+
+  METHOD get_inss.
+    rv_inss = mv_inss.
+  ENDMETHOD.
+
+  METHOD get_irrf.
+    rv_irrf = mv_irrf.
+  ENDMETHOD.
+
+  METHOD get_liquido.
+    rv_liquido = mv_liquido.
+  ENDMETHOD.
+
+ENDCLASS.
+
+CLASS zcl_folha_pagamento DEFINITION.
+
+  PUBLIC SECTION.
+
+    METHODS:
+      calcular
+        IMPORTING
+                  io_funcionario      TYPE REF TO zcl_funcionario
+        RETURNING VALUE(ro_resultado) TYPE REF TO zcl_resultado_folha.
+
+  PRIVATE SECTION.
+
+    METHODS:
+      calcular_inss
+        IMPORTING iv_salario     TYPE ty_salario
+        RETURNING VALUE(rv_inss) TYPE ty_salario,
+
+      calcular_irrf
+        IMPORTING
+                  iv_salario     TYPE ty_salario
+                  iv_inss        TYPE ty_salario
+        RETURNING VALUE(rv_irrf) TYPE ty_salario.
+
+ENDCLASS.
+
+CLASS zcl_folha_pagamento IMPLEMENTATION.
+
+  METHOD calcular.
+
+    DATA: lv_bruto   TYPE ty_salario,
+          lv_inss    TYPE ty_salario,
+          lv_irrf    TYPE ty_salario,
+          lv_liquido TYPE ty_salario.
+
+    lv_bruto = io_funcionario->get_salario( ).
+
+    lv_inss = calcular_inss( lv_bruto ).
+
+    lv_irrf = calcular_irrf(
+                iv_salario = lv_bruto
+                iv_inss    = lv_inss ).
+
+    lv_liquido = lv_bruto - lv_inss - lv_irrf.
+
+    CREATE OBJECT ro_resultado
+      EXPORTING
+        iv_bruto   = lv_bruto
+        iv_inss    = lv_inss
+        iv_irrf    = lv_irrf
+        iv_liquido = lv_liquido.
+
+  ENDMETHOD.
+
+  METHOD calcular_inss.
+
+    rv_inss = 0.
+
+    IF iv_salario > 0.
+
+      rv_inss = ( sal_min * '0.075' ).
+
+      IF iv_salario > sal_min.
+
+        rv_inss = rv_inss +
+          ( ( COND ty_salario(
+              WHEN iv_salario > '2902.84'
+        THEN '2902.84'
+        ELSE iv_salario ) - sal_min )
+        * '0.09' ).
+
+      ENDIF.
+
+      IF iv_salario > '2902.84'.
+
+        rv_inss = rv_inss +
+          ( ( COND ty_salario(
+              WHEN iv_salario > '4354.27'
+        THEN '4354.27'
+        ELSE iv_salario ) - '2902.84' )
+        * '0.12' ).
+
+      ENDIF.
+
+      IF iv_salario > '4354.27'.
+
+        rv_inss = rv_inss +
+          ( ( COND ty_salario(
+              WHEN iv_salario > '8475.55'
+        THEN '8475.55'
+        ELSE iv_salario ) - '4354.27' )
+        * '0.14' ).
+
+      ENDIF.
+
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD calcular_irrf.
+
+    DATA lv_base TYPE ty_salario.
+
+    lv_base = iv_salario - iv_inss.
+
+    IF lv_base <= '2428.00'.
+
+      rv_irrf = 0.
+
+    ELSEIF lv_base <= '2826.65'.
+
+      rv_irrf = ( lv_base * '0.075' ) - '182.16'.
+
+    ELSEIF lv_base <= '3751.05'.
+
+      rv_irrf = ( lv_base * '0.15' ) - '394.16'.
+
+    ELSEIF lv_base <= '4664.68'.
+
+      rv_irrf = ( lv_base * '0.225' ) - '675.49'.
+
+    ELSE.
+
+      rv_irrf = ( lv_base * '0.275' ) - '908.73'.
+
+    ENDIF.
+
+  ENDMETHOD.
+
+ENDCLASS.
+
+DATA: lo_funcionario TYPE REF TO zcl_funcionario,
+      lo_folha       TYPE REF TO zcl_folha_pagamento,
+      lo_resultado   TYPE REF TO zcl_resultado_folha,
+      gv_b_text      TYPE c LENGTH 20,
+      gv_calcular    TYPE abap_bool.
+
+PARAMETERS p_sal TYPE ty_salario.
+
+SELECTION-SCREEN SKIP.
+
+PARAMETERS: p_bru TYPE ty_salario,
+            p_ins TYPE ty_salario,
+            p_irr TYPE ty_salario,
+            p_liq TYPE ty_salario.
+
+SELECTION-SCREEN SKIP.
+
+SELECTION-SCREEN PUSHBUTTON /1(20) gv_b_txt
+  USER-COMMAND calc.
+
+INITIALIZATION.
+  gv_b_txt = 'Calcular'.
+
+  "Campos de leitura não editáveis
+
+AT SELECTION-SCREEN OUTPUT.
+
+  LOOP AT SCREEN.
+
+    CASE screen-name.
+
+      WHEN 'P_BRU'
+        OR 'P_INS'
+        OR 'P_IRR'
+        OR 'P_LIQ'.
+
+        screen-input = 0.
+        MODIFY SCREEN.
+
+    ENDCASE.
+
+  ENDLOOP.
+
+  "Clique do botão
+
+AT SELECTION-SCREEN.
+
+  IF sscrfields-ucomm = 'CALC'.
+
+    CREATE OBJECT lo_funcionario
+      EXPORTING
+        iv_salario = p_sal.
+
+    CREATE OBJECT lo_folha.
+
+    lo_resultado = lo_folha->calcular( lo_funcionario ).
+
+    p_bru = lo_resultado->get_bruto( ).
+
+    p_ins = lo_resultado->get_inss( ).
+
+    p_irr = lo_resultado->get_irrf( ).
+
+    p_liq = lo_resultado->get_liquido( ).
+
+  ENDIF.
